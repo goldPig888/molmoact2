@@ -73,3 +73,7 @@ scripts.sh
 
 /beaker/
 *.sh
+!run_vlareplica_benchmark.sh
+!run_vlareplica_pilot.sh
+!run_vlareplica_final_test.sh
+!scripts/convert_and_push_vlareplica.sh

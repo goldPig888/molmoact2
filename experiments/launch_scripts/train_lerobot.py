@@ -48,6 +48,7 @@ from launch_scripts.lerobot_utils.stats import (
 )
 from olmo.data.data_loader import DataLoaderConfig
 from olmo.data.dynamic_packer import PackingConfig
+from olmo.eval.loss_evaluator import LossDatasetEvaluatorConfig
 from olmo.data.robot_processing import RobotProcessorConfig
 from olmo.extra_tokens import (
     ACTION_TOKENS,
@@ -205,6 +206,14 @@ def main():
     parser.add_argument("--global_batch_size", default=128, type=int)
     parser.add_argument("--log_interval", default=20, type=int)
     parser.add_argument("--max_loss_examples", default=2048, type=int)
+    parser.add_argument(
+        "--validation_mixture",
+        default=None,
+        help=(
+            "Optional registered LeRobot mixture evaluated during training. "
+            "Use an episode-disjoint mixture such as vlareplica_val."
+        ),
+    )
     parser.add_argument("--max_inf_eval_examples", default=1280, type=int)
     parser.add_argument("--prefetch_factor", default=4, type=int)
     parser.add_argument("--num_workers", default=6, type=int)
@@ -454,6 +463,14 @@ def main():
         style_robot_depth=float(args.style_robot_depth),
         style_robot_depth_action=float(args.style_robot_depth_action),
     )
+    validation_data_plan = None
+    if args.validation_mixture:
+        validation_data_plan = get_lerobot_training_data_plan(
+            args.validation_mixture,
+            style_robot_action=float(args.style_robot_action),
+            style_robot_depth=float(args.style_robot_depth),
+            style_robot_depth_action=float(args.style_robot_depth_action),
+        )
     inferred_max_action_horizon = infer_max_action_horizon_from_lerobot_metadata(
         training_data_plan.robot_mixture,
         tag_metadata_by_tag=TAG_METADATA_BY_TAG,
@@ -800,6 +817,34 @@ def main():
             action_chunk_cap=args.packed_action_chunk_cap,
         ) if args.packing else None,
     )
+    if validation_data_plan is not None:
+        validation_groups = validation_data_plan.combined_mixture
+        if len(validation_groups) != 1 or len(validation_groups[0].datasets) != 1:
+            raise ValueError(
+                "--validation_mixture currently requires a mixture containing exactly one dataset."
+            )
+        validation_dataset = validation_groups[0].datasets[0].dataset_name
+        validation_data_cfg = replace(
+            primary_data_cfg,
+            dataset=validation_dataset,
+            kwargs_mixture=None,
+            shuffle=False,
+            drop_last=False,
+            packing=None,
+            skip_overlong_examples=False,
+            skip_missing_vlm_examples=False,
+        )
+        loss_evaluations.append(
+            LossDatasetEvaluatorConfig(
+                label=args.validation_mixture,
+                data=validation_data_cfg,
+                device_batch_size=args.device_batch_size,
+                max_examples=args.max_loss_examples,
+                console_log_interval=log_interval,
+                response_logits_only=True,
+                reduce_loss_metrics_manually=True,
+            )
+        )
     vlm_data_cfg = None
     if args.separate_vlm_dataloader:
         assert vlm_mixture is not None

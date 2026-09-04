@@ -389,6 +389,67 @@ def build_molmoact2_so100_so101() -> Tuple[List[RawMixtureEntry], Dict[str, Dict
     )
 
 
+def build_molmoact2_vlareplica() -> Tuple[List[RawMixtureEntry], Dict[str, Dict[str, object]]]:
+    """VLAReplica SO-101 data in native LeRobot v3 joint coordinates."""
+    return build_single_lerobot_mixture(
+        name="vlareplica",
+        tag="vlareplica_so101_v3",
+        repo_ids=["HenryZhang/VLAReplica_SFT_data"],
+        action_key="action",
+        state_keys=["observation.state"],
+        camera_keys=[
+            "observation.images.top",
+            "observation.images.wrist",
+        ],
+        normalize_gripper=True,
+        setup_type="single so101 robotic arm in VLAReplica tabletop workspace",
+        control_mode="absolute joint pose",
+        action_horizon=32,
+        n_action_steps=32,
+    )
+
+
+# Deterministic, task-stratified 81/10/10 split (seed 50189). Every one of the
+# 27 tasks is represented in all three subsets. LeRobot's ``repo@episodes``
+# syntax selects episodes without copying the dataset.
+VLAREPLICA_EPISODE_SPLITS = {
+    "train": "0-5,7,9-10,13-31,33-41,43-44,46,48-54,56,58-62,64-68,70,72-78,80-81,83-87,89-90,92-94,96-99,101-104,106-110,112-115,117-119,121-125,127-135,137-138,140-141,143-146,148-157,159,161-162,164-171,173-179,182-187,189,191-203,205-207,210,212-219,222-223,225-234,237-242,244-250,253-269,272,274-281,283-284,286-289,292-293,295-306,309-311,313-315,317-320,322-326,328,330-331,333-339,341-343,346-349,351-355,357,359-361,363-369,372-373,375-381,383-384,386-393,395-396,398-400,402-403,405,407-412,414-426,429-431,433-448,450,453-456,458-463,466-469,472-478,480-491,493-496,498-500",
+    "val": "8,12,32,42,55,63,71,82,91,105,116,120,139,147,160,163,180,190,209,220-221,224,235,252,270-271,285,294,307,316,321,332,340,350,358,362,374,385,397,401,406,428,449,451,457,465,492,497",
+    "test": "6,11,45,47,57,69,79,88,95,100,111,126,136,142,158,172,181,188,204,208,211,236,243,251,273,282,290-291,308,312,327,329,344-345,356,370-371,382,394,404,413,427,432,452,464,470-471,479",
+}
+
+
+def _build_molmoact2_vlareplica_split(split: str):
+    return build_single_lerobot_mixture(
+        name=f"vlareplica_{split}",
+        tag="vlareplica_so101_v3",
+        repo_ids=[f"HenryZhang/VLAReplica_SFT_data@{VLAREPLICA_EPISODE_SPLITS[split]}"],
+        action_key="action",
+        state_keys=["observation.state"],
+        camera_keys=[
+            "observation.images.top",
+            "observation.images.wrist",
+        ],
+        normalize_gripper=True,
+        setup_type="single so101 robotic arm in VLAReplica tabletop workspace",
+        control_mode="absolute joint pose",
+        action_horizon=32,
+        n_action_steps=32,
+    )
+
+
+def build_molmoact2_vlareplica_train():
+    return _build_molmoact2_vlareplica_split("train")
+
+
+def build_molmoact2_vlareplica_val():
+    return _build_molmoact2_vlareplica_split("val")
+
+
+def build_molmoact2_vlareplica_test():
+    return _build_molmoact2_vlareplica_split("test")
+
+
 MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "pre_post_train": build_molmoact2_pre_post_train,
     "droid": build_molmoact2_droid,
@@ -396,4 +457,8 @@ MOLMOACT2_LEROBOT_MIXTURES: Dict[str, MixtureBuilder] = {
     "libero_goal": build_molmoact2_libero_goal,
     "yam": build_molmoact2_yam,
     "so100_so101": build_molmoact2_so100_so101,
+    "vlareplica": build_molmoact2_vlareplica,
+    "vlareplica_train": build_molmoact2_vlareplica_train,
+    "vlareplica_val": build_molmoact2_vlareplica_val,
+    "vlareplica_test": build_molmoact2_vlareplica_test,
 }

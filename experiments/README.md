@@ -198,6 +198,60 @@ HF_ACCESS_TOKEN="${HF_ACCESS_TOKEN:-}" WANDB_API_KEY="${WANDB_API_KEY:-}" torchr
   --ft_embedding=none
 ```
 
+### VLAReplica Pilot With Held-Out Validation
+
+The repository includes a deterministic, task-stratified split of
+`HenryZhang/VLAReplica_SFT_data`: 405 training episodes, 48 validation episodes,
+and 48 test episodes. All 27 tasks occur in every subset. Train on
+`vlareplica_train`, monitor `vlareplica_val` during training, and leave
+`vlareplica_test` untouched until final model selection.
+
+On a workstation with two 24 GB RTX A5000 GPUs, run the 200-step pilot from
+this `experiments` directory:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc-per-node=2 \
+  launch_scripts/train_lerobot.py \
+  allenai/MolmoAct2-SO100_101 \
+  vlareplica_train \
+  --validation_mixture=vlareplica_val \
+  --max_duration=200 \
+  --device_batch_size=1 \
+  --global_batch_size=2 \
+  --num_workers=0 \
+  --pin_memory=false \
+  --save_folder=/metadisk/may/molmoact2-checkpoints/pilot-200 \
+  --save_interval=100 \
+  --save_num_checkpoints_to_keep=3 \
+  --eval_interval=100 \
+  --max_loss_examples=96 \
+  --packing=false \
+  --dynamic_seq_len=true \
+  --ft_vlm=false \
+  --ft_action_expert=true \
+  --ft_embedding=none \
+  --lora_enable=false \
+  --action_expert_learning_rate=5e-5
+```
+
+This evaluates at steps 100 and 200 (and on the last step), while keeping the
+test episodes out of checkpoint selection.
+
+For a live terminal dashboard, use the bundled launcher in the first terminal
+and monitor in a second terminal:
+
+```bash
+# Terminal 1
+bash run_vlareplica_pilot.sh
+
+# Terminal 2
+python scripts/monitor_vlareplica_training.py
+```
+
+The dashboard reports step/ETA, train and validation losses, both GPUs, output
+size, saved checkpoints, free metadisk space, worker count, and recent warnings.
+Closing it with Ctrl+C does not stop training.
+
 ### Full Fine-Tuning
 
 Full fine-tuning updates the VLM, vision tower, connector, LM head, and action expert. Use it for larger datasets or substantial embodiment changes.
