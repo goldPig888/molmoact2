@@ -20,6 +20,7 @@ fi
 export CUDA_VISIBLE_DEVICES="$gpu_ids"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export WANDB_PROJECT=${WANDB_PROJECT:-molmoact2-vlareplica}
+export WANDB_ENTITY=${WANDB_ENTITY:-local}
 export WANDB_MODE=${WANDB_MODE:-offline}
 
 echo "GPUs: $gpu_ids ($nproc_per_node processes)"
