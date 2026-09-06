@@ -197,6 +197,52 @@ def _install_lerobot_torchcodec_retry_patch() -> None:
                 self._cache[video_path] = (decoder, file_handle)
             return self._cache[video_path][0]
 
+    def _decode_video_frames_pyav_native(
+        video_path: str,
+        timestamps: list[float],
+        tolerance_s: float,
+        log_loaded_timestamps: bool = False,
+    ) -> torch.Tensor:
+        if av is None:
+            raise ImportError("PyAV is required for the TorchCodec decode fallback.")
+
+        first_ts = min(timestamps)
+        last_ts = max(timestamps)
+        loaded_frames: List[torch.Tensor] = []
+        loaded_ts: List[float] = []
+        with av.open(video_path) as container:
+            stream = container.streams.video[0]
+            if stream.time_base is not None:
+                seek_pts = max(0, int(first_ts / float(stream.time_base)))
+                container.seek(seek_pts, stream=stream, backward=True, any_frame=False)
+            for frame in container.decode(stream):
+                if frame.pts is None or frame.time_base is None:
+                    continue
+                current_ts = float(frame.pts * frame.time_base)
+                frame_tensor = torch.from_numpy(
+                    np.array(frame.to_ndarray(format="rgb24"), copy=True)
+                ).permute(2, 0, 1)
+                loaded_frames.append(frame_tensor)
+                loaded_ts.append(current_ts)
+                if log_loaded_timestamps:
+                    log.info("PyAV frame loaded at timestamp=%0.4f", current_ts)
+                if current_ts >= last_ts:
+                    break
+
+        if not loaded_frames:
+            raise RuntimeError(f"PyAV did not return any frames for {video_path}.")
+
+        query_ts = torch.tensor(timestamps)
+        loaded_ts_tensor = torch.tensor(loaded_ts)
+        dist = torch.cdist(query_ts[:, None], loaded_ts_tensor[:, None], p=1)
+        min_, argmin_ = dist.min(1)
+        if not (min_ < tolerance_s).all():
+            raise lerobot_video_utils.FrameTimestampError(
+                f"PyAV fallback timestamps violate tolerance ({min_} > {tolerance_s=}). "
+                f"queried={query_ts}, loaded={loaded_ts_tensor}, video={video_path}"
+            )
+        return torch.stack([loaded_frames[idx] for idx in argmin_]).to(torch.float32) / 255.0
+
     def _patched_decode_video_frames_torchcodec(
         video_path: Path | str,
         timestamps: list[float],
@@ -229,6 +275,19 @@ def _install_lerobot_torchcodec_retry_patch() -> None:
                     if hasattr(decoder_cache, "remove"):
                         decoder_cache.remove(video_path)
                     continue
+                if _should_retry_lerobot_torchcodec_packet_error(exc):
+                    log.warning(
+                        "TorchCodec could not decode %s after retry; falling back to native PyAV.",
+                        video_path,
+                    )
+                    if hasattr(decoder_cache, "remove"):
+                        decoder_cache.remove(video_path)
+                    return _decode_video_frames_pyav_native(
+                        video_path,
+                        timestamps,
+                        tolerance_s,
+                        log_loaded_timestamps,
+                    )
                 raise
 
         if frames_batch is None:
