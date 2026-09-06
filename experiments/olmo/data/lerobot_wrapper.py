@@ -170,6 +170,7 @@ def _install_lerobot_torchcodec_retry_patch() -> None:
         return
 
     cache_cls = lerobot_video_utils.VideoDecoderCache
+    original_torchvision_decoder = lerobot_video_utils.decode_video_frames_torchvision
 
     def _patched_remove(self, video_path: str) -> None:
         video_path = str(video_path)
@@ -336,9 +337,25 @@ def _install_lerobot_torchcodec_retry_patch() -> None:
 
         return closest_frames
 
+    def _patched_decode_video_frames_torchvision(
+        video_path: Path | str,
+        timestamps: list[float],
+        tolerance_s: float,
+        backend: str = "pyav",
+        log_loaded_timestamps: bool = False,
+    ) -> torch.Tensor:
+        if backend == "pyav":
+            return _decode_video_frames_pyav_native(
+                str(video_path), timestamps, tolerance_s, log_loaded_timestamps
+            )
+        return original_torchvision_decoder(
+            video_path, timestamps, tolerance_s, backend, log_loaded_timestamps
+        )
+
     cache_cls.remove = _patched_remove
     cache_cls.get_decoder = _patched_get_decoder
     lerobot_video_utils.decode_video_frames_torchcodec = _patched_decode_video_frames_torchcodec
+    lerobot_video_utils.decode_video_frames_torchvision = _patched_decode_video_frames_torchvision
     lerobot_video_utils._molmo_torchcodec_retry_patch_installed = True
 
 
