@@ -19,6 +19,7 @@ dependencies = [
     "numpy<2.3.0,>=2.0.0",
     "torch",
     "torchvision",
+    "torchcodec>=0.14",
     "omegaconf",
     "rich",
     "boto3",

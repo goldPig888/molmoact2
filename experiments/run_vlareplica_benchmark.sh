@@ -22,6 +22,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export WANDB_PROJECT=${WANDB_PROJECT:-molmoact2-vlareplica}
 export WANDB_ENTITY=${WANDB_ENTITY:-local}
 export WANDB_MODE=${WANDB_MODE:-offline}
+export LEROBOT_VIDEO_BACKEND=torchcodec
 
 echo "GPUs: $gpu_ids ($nproc_per_node processes)"
 echo "Effective global batch: $global_batch_size"
@@ -33,7 +34,7 @@ torchrun --standalone --nproc-per-node="$nproc_per_node" \
   launch_scripts/train_lerobot.py \
   allenai/MolmoAct2-SO100_101 \
   vlareplica \
-  --frame_loading_backend=av \
+  --frame_loading_backend=torchcodec_exact \
   --max_duration=40000 \
   --device_batch_size="$device_batch_size" \
   --global_batch_size="$global_batch_size" \
